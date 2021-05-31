@@ -150,23 +150,33 @@
                 }
                 break;
             }
-            [audioSession setPreferredIOBufferDuration:0.01 error:&error]; // 10ms采集一次
-            if (error){
-                NSLog(@"AVAudioSession error setPreferredIOBufferDuration = %@",error.debugDescription);
-            }
-            //此选项确保可以录到所有的频谱
-            [audioSession setPreferredSampleRate:48000 error:&error];
-            if (error){
-                NSLog(@"AVAudioSession error setPreferredSampleRate = %@",error.debugDescription);
-            }
-            //内置麦克风只有单声道
-            [audioSession setPreferredInputNumberOfChannels:1 error:&error];
-            if (error){
-                NSLog(@"AVAudioSession error setPreferredInputNumberOfChannels = %@",error.debugDescription);
-            }
+            
             break;
         }
     }
+    if (audioSession.preferredIOBufferDuration != 0.01){
+        [audioSession setPreferredIOBufferDuration:0.01 error:&error]; // 10ms采集一次
+        if (error){
+            NSLog(@"AVAudioSession error setPreferredIOBufferDuration = %@",error.debugDescription);
+        }
+    }
+
+    //此选项确保可以录到所有的频谱
+    if (audioSession.preferredSampleRate != 48000){
+        [audioSession setPreferredSampleRate:48000 error:&error];
+        if (error){
+            NSLog(@"AVAudioSession error setPreferredSampleRate = %@",error.debugDescription);
+        }
+    }
+
+    //内置麦克风只有单声道
+    if (audioSession.preferredInputNumberOfChannels != 1){
+        [audioSession setPreferredInputNumberOfChannels:1 error:&error];
+        if (error){
+            NSLog(@"AVAudioSession error setPreferredInputNumberOfChannels = %@",error.debugDescription);
+        }
+    }
+
 }
 
 - (void) refreshAudioSource: (NSNotification *) notification{
