@@ -61,7 +61,7 @@
     //AVAudioSessionCategoryOptionDefaultToSpeaker 不要用它，否则所有声音会直接从喇叭播放
     //当需要从喇叭播放时请使用audioSession overrideOutputAudioPort:<#(AVAudioSessionPortOverride)#> error:<#(NSError * _Nullable * _Nullable)#>
     
-    success = [audioSession setCategory:AVAudioSessionCategoryPlayAndRecord withOptions:AVAudioSessionCategoryOptionAllowBluetoothA2DP|AVAudioSessionCategoryOptionAllowBluetooth|AVAudioSessionCategoryOptionMixWithOthers error:&error];
+    success = [audioSession setCategory:AVAudioSessionCategoryPlayAndRecord withOptions:AVAudioSessionCategoryOptionAllowBluetoothA2DP|AVAudioSessionCategoryOptionMixWithOthers error:&error];
     
 
     if(!success)
