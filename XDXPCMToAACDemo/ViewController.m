@@ -219,7 +219,7 @@
             }
         }
     }
-    [self setDefaultMICParams];
+    [self setDefaultMicParams];
 }
 
 - (void)useHeadsetMic{
@@ -260,7 +260,7 @@
             }
         }
     }
-    [self setDefaultMICParams];
+    [self setDefaultMicParams];
 }
 
 
