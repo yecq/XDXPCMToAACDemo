@@ -58,7 +58,7 @@
     NSError* error = nil;
     
     //AVAudioSessionCategoryOptionAllowBluetoothA2DP 可以使用蓝牙声音输出
-    //除非一定需要从蓝牙耳机录音，否则不要加上AVAudioSessionCategoryOptionAllowBluetooth，airpods会把手机麦克风选项排除
+    //AVAudioSessionCategoryOptionAllowBluetooth 除非一定需要从蓝牙耳机录音，否则不要加上，airpods会把手机麦克风选项排除
     //AVAudioSessionCategoryOptionDefaultToSpeaker 不要用它，否则所有声音会直接从喇叭播放
     //当需要从喇叭播放时请使用audioSession overrideOutputAudioPort:<#(AVAudioSessionPortOverride)#> error:<#(NSError * _Nullable * _Nullable)#>
     
