@@ -20,17 +20,25 @@
 @property (nonatomic, strong) XDXRecorder    *liveRecorder;
 @property (nonatomic, strong) XDXVolumeView  *recordVolumeView;
 @property (nonatomic, assign) BOOL              isActive;
+@property (nonatomic, assign) int               selectMICSource; //0 default    1 builtinmic      2 headsetmic
+@property (nonatomic, assign) int               forceSpeaker; //0 no    1 force
 @end
 
 @implementation ViewController
 
 - (void)viewDidLoad {
     [super viewDidLoad];
+    self.selectMICSource = 1;//使用内置 mic
+    self.forceSpeaker = 1;//强制使用speaker
     // Do any additional setup after loading the view, typically from a nib.
-    [self configureAudio];
+   
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(onAudioSessionEvent:) name:AVAudioSessionInterruptionNotification object:nil];
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(audioRouteChanged:) name:AVAudioSessionRouteChangeNotification object:nil];
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(audioServerReset:) name:AVAudioSessionMediaServicesWereResetNotification object:nil];
+    
+    [self configureAudio];
+    
+    
     /*
         注意，本例中XDXRecorder中分别用AudioQueue与AudioUnit实现了录音，区别好处在博客简书中均有介绍，在此不再重复，请根据需要选择。
      */
@@ -57,58 +65,113 @@
     BOOL success;
     NSError* error = nil;
     
+    //AVCaptureSession或其它代码会修改我们的选项，所以每次启动录音前都要根据当前的录音context重新设置audioSession
     //AVAudioSessionCategoryOptionAllowBluetoothA2DP 可以使用蓝牙声音输出
     //AVAudioSessionCategoryOptionAllowBluetooth 除非一定需要从蓝牙耳机录音，否则不要加上，airpods会把手机麦克风选项排除
     //AVAudioSessionCategoryOptionDefaultToSpeaker 不要用它，否则所有声音会直接从喇叭播放
     //当需要从喇叭播放时请使用audioSession overrideOutputAudioPort:<#(AVAudioSessionPortOverride)#> error:<#(NSError * _Nullable * _Nullable)#>
-    
-    success = [audioSession setCategory:AVAudioSessionCategoryPlayAndRecord withOptions:AVAudioSessionCategoryOptionAllowBluetoothA2DP|AVAudioSessionCategoryOptionMixWithOthers error:&error];
+    if (self.selectMICSource == 0){
+        //default,用系统默认，允许蓝牙耳机录音
+        success = [audioSession setCategory:AVAudioSessionCategoryPlayAndRecord withOptions:AVAudioSessionCategoryOptionAllowBluetooth|AVAudioSessionCategoryOptionAllowBluetoothA2DP|AVAudioSessionCategoryOptionMixWithOthers error:&error];
+        [audioSession setMode:AVAudioSessionModeDefault error:&error];
+    }else{
+        //另外两种不允许蓝牙耳机录音
+        success = [audioSession setCategory:AVAudioSessionCategoryPlayAndRecord withOptions:AVAudioSessionCategoryOptionAllowBluetoothA2DP|AVAudioSessionCategoryOptionMixWithOthers error:&error];
+        [audioSession setMode:AVAudioSessionModeVideoRecording error:&error];//这个选项正好，但是AVCaptureSession会修改AVAudioSession属性
+    }
     
 
     if(!success)
         NSLog(@"AVAudioSession error setCategory = %@",error.debugDescription);
 
-    
     success = [audioSession setActive:YES error:&error];
     if (success){
         self.isActive = TRUE;
-        //使用内置麦克风
-        [self useBestAudioOutput];
-        [self useBuiltInMic];
+        [self refreshAudioSource:nil];
     }
-
 }
 
 - (void)useBestAudioOutput{
     if (!self.isActive){
         return;
     }
-
     AVAudioSessionRouteDescription *currentRoute = [[AVAudioSession sharedInstance] currentRoute];
     AVAudioSessionPortDescription *currentOutput = [[currentRoute outputs] firstObject];
-    int outputCount = [[currentRoute outputs] count];
-    if ((outputCount > 1) && [currentOutput.portType isEqualToString:AVAudioSessionPortBuiltInSpeaker]){
-        //当前使用喇叭输出
-        //如果需要，使用默认输出
-        NSLog(@"set to default output");
+    if (![currentOutput.portType isEqualToString:AVAudioSessionPortBuiltInSpeaker] && self.forceSpeaker){
+        NSLog(@"set to speaker output");
+        [[AVAudioSession sharedInstance] overrideOutputAudioPort:AVAudioSessionPortOverrideSpeaker error:nil];
+    }else{
         [[AVAudioSession sharedInstance] overrideOutputAudioPort:AVAudioSessionPortOverrideNone error:nil];
-    }else if ((outputCount > 1) && [currentOutput.portType isEqualToString:AVAudioSessionPortBuiltInReceiver]){
-        //当前使用听筒输出
-        //如果需要，使用强制喇叭输出
-        if (outputCount > 2){
-            //当前有更多的输出设备，当前没有使用喇叭输出
-        }else{
-            NSLog(@"set to seapker output");
-            [[AVAudioSession sharedInstance] overrideOutputAudioPort:AVAudioSessionPortOverrideSpeaker error:nil];
-        }
-        
-    }else if (outputCount > 2){
-        //当前有更多的输出设备，当前没有使用喇叭输出
-        //如果需要，使用强制喇叭输出
-//        NSLog(@"set to seapker output");
-//        [[AVAudioSession sharedInstance] overrideOutputAudioPort:AVAudioSessionPortOverrideSpeaker error:nil];
     }
+}
 
+- (void) refreshAudioSource: (NSNotification *) notification{
+    [self useBestAudioOutput];
+    if (self.selectMICSource == 1){
+        [self useBuiltInMic];
+    }else if (self.selectMICSource == 2){
+        [self useHeadsetMic];
+    }else{
+        [self setDefaultMICParams];
+    }
+}
+
+- (void)setDefaultMICParams{
+    if (!self.isActive){
+        return;
+    }
+    NSError* error = nil;
+    AVAudioSession *audioSession = [AVAudioSession sharedInstance];
+    
+    if (audioSession.preferredIOBufferDuration != 0.01){
+        [audioSession setPreferredIOBufferDuration:0.01 error:&error]; // 10ms采集一次
+        if (error){
+            NSLog(@"AVAudioSession error setPreferredIOBufferDuration = %@",error.debugDescription);
+        }
+    }
+    
+    //此选项确保可以录到所有的频谱
+    if (audioSession.preferredSampleRate != 48000){
+        [audioSession setPreferredSampleRate:48000 error:&error];
+        if (error){
+            NSLog(@"AVAudioSession error setPreferredSampleRate = %@",error.debugDescription);
+        }
+    }
+    
+    //内置麦克风只有单声道
+    if (audioSession.preferredInputNumberOfChannels != 1){
+        [audioSession setPreferredInputNumberOfChannels:1 error:&error];
+        if (error){
+            NSLog(@"AVAudioSession error setPreferredInputNumberOfChannels = %@",error.debugDescription);
+        }
+    }
+}
+
+- (BOOL)needSetMic: (NSArray *) inputs{
+    AVAudioSessionPortDescription *currentInput = [inputs firstObject];
+    if (self.selectMICSource == 0){
+        return FALSE;
+    }else if (self.selectMICSource == 1){
+        if ([currentInput.portType isEqualToString:AVAudioSessionPortBuiltInMic]){
+            AVAudioSessionDataSourceDescription* source = [currentInput.dataSources firstObject];
+            NSString* polar = [source selectedPolarPattern];
+            if (currentInput.selectedDataSource == source && [polar isEqualToString:AVAudioSessionPolarPatternOmnidirectional]){
+                return FALSE;
+            }else{
+                return TRUE;
+            }
+        }
+    }else if (self.selectMICSource == 2){
+        if ([currentInput.portType isEqualToString:AVAudioSessionPortHeadsetMic]){
+            if ([currentInput.portType isEqualToString:AVAudioSessionPortHeadsetMic]){
+                return FALSE;
+            }
+        }
+    }
+    if ([[[AVAudioSession sharedInstance] availableInputs] count] > 1){
+        return TRUE; //if there is more choice, let's try set
+    }
+    return FALSE;
 }
 
 - (void)useBuiltInMic{
@@ -158,35 +221,50 @@
             }
         }
     }
-    if (audioSession.preferredIOBufferDuration != 0.01){
-        [audioSession setPreferredIOBufferDuration:0.01 error:&error]; // 10ms采集一次
-        if (error){
-            NSLog(@"AVAudioSession error setPreferredIOBufferDuration = %@",error.debugDescription);
-        }
-    }
-
-    //此选项确保可以录到所有的频谱
-    if (audioSession.preferredSampleRate != 48000){
-        [audioSession setPreferredSampleRate:48000 error:&error];
-        if (error){
-            NSLog(@"AVAudioSession error setPreferredSampleRate = %@",error.debugDescription);
-        }
-    }
-
-    //内置麦克风只有单声道
-    if (audioSession.preferredInputNumberOfChannels != 1){
-        [audioSession setPreferredInputNumberOfChannels:1 error:&error];
-        if (error){
-            NSLog(@"AVAudioSession error setPreferredInputNumberOfChannels = %@",error.debugDescription);
-        }
-    }
-
+    [self setDefaultMICParams];
 }
 
-- (void) refreshAudioSource: (NSNotification *) notification{
-    [self useBestAudioOutput];
-    [self useBuiltInMic];
+- (void)useHeadsetMic{
+    if (!self.isActive){
+        return;
+    }
+    BOOL needSetMic = TRUE;
+    NSError* error = nil;
+    AVAudioSession *audioSession = [AVAudioSession sharedInstance];
+    
+    AVAudioSessionRouteDescription *currentRoute = [[AVAudioSession sharedInstance] currentRoute];
+    AVAudioSessionPortDescription *currentInput = [[currentRoute inputs] firstObject];
+    if ([currentInput.portType isEqualToString:AVAudioSessionPortHeadsetMic]){
+        needSetMic = FALSE;//不需要做任何设置
+    }
+    if (needSetMic){
+        NSLog(@"use headset mic");
+        for (AVAudioSessionPortDescription *inputPort in [audioSession availableInputs])
+        {
+            if([inputPort.portType isEqualToString:AVAudioSessionPortHeadsetMic])
+            {
+                [audioSession setPreferredInput:inputPort error:&error];
+                if (error){
+                    NSLog(@"AVAudioSession error setPreferredInput = %@",error.debugDescription);
+                }
+                //我们只用最安全的第一个data source
+                for (AVAudioSessionDataSourceDescription* source in [inputPort dataSources]){
+                    
+                    [inputPort setPreferredDataSource:source error:&error];
+                    if (error){
+                        NSLog(@"AVAudioSession error setPreferredDataSource = %@",error.debugDescription);
+                    }
+                    
+                    break;
+                }
+                
+                break;
+            }
+        }
+    }
+    [self setDefaultMICParams];
 }
+
 
 - (void) audioServerReset: (NSNotification *) notification{
     [self endAudio:nil];
@@ -226,6 +304,8 @@
     AVAudioSessionRouteDescription *currentRoute = [[AVAudioSession sharedInstance] currentRoute];
     AVAudioSessionRouteDescription *oldRoute = [dic objectForKey:AVAudioSessionRouteChangePreviousRouteKey];
     
+    NSArray* inputs = currentRoute.inputs;
+    
     AVAudioSessionPortDescription* currentInput = [currentRoute.inputs firstObject];
     AVAudioSessionPortDescription* currentOutput = [currentRoute.outputs firstObject];
     
@@ -239,6 +319,8 @@
     //每次有变化时根据当前程序的设置需要重新更改一下
     if (reason == AVAudioSessionRouteChangeReasonNewDeviceAvailable || reason == AVAudioSessionRouteChangeReasonOldDeviceUnavailable ||
         reason == AVAudioSessionRouteChangeReasonWakeFromSleep || reason == AVAudioSessionRouteChangeReasonNoSuitableRouteForCategory){
+        [self performSelector:@selector(configureAudio) withObject:notify afterDelay:0.1];
+    }else if ([self needSetMic:inputs]){
         [self performSelector:@selector(configureAudio) withObject:notify afterDelay:0.1];
     }
     
