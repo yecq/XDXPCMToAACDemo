@@ -20,7 +20,7 @@
 @property (nonatomic, strong) XDXRecorder    *liveRecorder;
 @property (nonatomic, strong) XDXVolumeView  *recordVolumeView;
 @property (nonatomic, assign) BOOL              isActive;
-@property (nonatomic, assign) int               selectMICSource; //0 default    1 builtinmic      2 headsetmic
+@property (nonatomic, assign) int               selectMicSource; //0 default    1 builtinmic      2 headsetmic
 @property (nonatomic, assign) int               forceSpeaker; //0 no    1 force
 @end
 
@@ -28,7 +28,7 @@
 
 - (void)viewDidLoad {
     [super viewDidLoad];
-    self.selectMICSource = 1;//使用内置 mic
+    self.selectMicSource = 1;//使用内置 mic
     self.forceSpeaker = 1;//强制使用speaker
     // Do any additional setup after loading the view, typically from a nib.
    
@@ -70,7 +70,7 @@
     //AVAudioSessionCategoryOptionAllowBluetooth 除非一定需要从蓝牙耳机录音，否则不要加上，airpods会把手机麦克风选项排除
     //AVAudioSessionCategoryOptionDefaultToSpeaker 不要用它，否则所有声音会直接从喇叭播放
     //当需要从喇叭播放时请使用audioSession overrideOutputAudioPort:<#(AVAudioSessionPortOverride)#> error:<#(NSError * _Nullable * _Nullable)#>
-    if (self.selectMICSource == 0){
+    if (self.selectMicSource == 0){
         //default,用系统默认，允许蓝牙耳机录音
         success = [audioSession setCategory:AVAudioSessionCategoryPlayAndRecord withOptions:AVAudioSessionCategoryOptionAllowBluetooth|AVAudioSessionCategoryOptionAllowBluetoothA2DP|AVAudioSessionCategoryOptionMixWithOthers error:&error];
         [audioSession setMode:AVAudioSessionModeDefault error:&error];
@@ -107,16 +107,16 @@
 
 - (void) refreshAudioSource: (NSNotification *) notification{
     [self useBestAudioOutput];
-    if (self.selectMICSource == 1){
+    if (self.selectMicSource == 1){
         [self useBuiltInMic];
-    }else if (self.selectMICSource == 2){
+    }else if (self.selectMicSource == 2){
         [self useHeadsetMic];
     }else{
-        [self setDefaultMICParams];
+        [self setDefaultMicParams];
     }
 }
 
-- (void)setDefaultMICParams{
+- (void)setDefaultMicParams{
     if (!self.isActive){
         return;
     }
@@ -149,9 +149,9 @@
 
 - (BOOL)needSetMic: (NSArray *) inputs{
     AVAudioSessionPortDescription *currentInput = [inputs firstObject];
-    if (self.selectMICSource == 0){
+    if (self.selectMicSource == 0){
         return FALSE;
-    }else if (self.selectMICSource == 1){
+    }else if (self.selectMicSource == 1){
         if ([currentInput.portType isEqualToString:AVAudioSessionPortBuiltInMic]){
             AVAudioSessionDataSourceDescription* source = [currentInput.dataSources firstObject];
             NSString* polar = [source selectedPolarPattern];
@@ -161,11 +161,9 @@
                 return TRUE;
             }
         }
-    }else if (self.selectMICSource == 2){
+    }else if (self.selectMicSource == 2){
         if ([currentInput.portType isEqualToString:AVAudioSessionPortHeadsetMic]){
-            if ([currentInput.portType isEqualToString:AVAudioSessionPortHeadsetMic]){
-                return FALSE;
-            }
+            return FALSE;
         }
     }
     if ([[[AVAudioSession sharedInstance] availableInputs] count] > 1){
