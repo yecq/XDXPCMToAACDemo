@@ -62,7 +62,7 @@
 {
     AVAudioSession *audioSession = [AVAudioSession sharedInstance];
     
-    BOOL success;
+    BOOL success = FALSE;
     NSError* error = nil;
     
     //AVCaptureSession或其它代码会修改我们的选项，所以每次启动录音前都要根据当前的录音context重新设置audioSession
@@ -70,24 +70,46 @@
     //AVAudioSessionCategoryOptionAllowBluetooth 除非一定需要从蓝牙耳机录音，否则不要加上，airpods会把手机麦克风选项排除
     //AVAudioSessionCategoryOptionDefaultToSpeaker 不要用它，否则所有声音会直接从喇叭播放
     //当需要从喇叭播放时请使用audioSession overrideOutputAudioPort:<#(AVAudioSessionPortOverride)#> error:<#(NSError * _Nullable * _Nullable)#>
+    AVAudioSessionCategoryOptions options;
+    NSString* mode;
     if (self.selectMicSource == 0){
         //default,用系统默认，允许蓝牙耳机录音
-        success = [audioSession setCategory:AVAudioSessionCategoryPlayAndRecord withOptions:AVAudioSessionCategoryOptionAllowBluetooth|AVAudioSessionCategoryOptionAllowBluetoothA2DP|AVAudioSessionCategoryOptionMixWithOthers error:&error];
-        [audioSession setMode:AVAudioSessionModeDefault error:&error];
+        options = AVAudioSessionCategoryOptionAllowBluetooth|AVAudioSessionCategoryOptionAllowBluetoothA2DP|AVAudioSessionCategoryOptionMixWithOthers;
+        mode = AVAudioSessionModeDefault;
     }else{
         //另外两种不允许蓝牙耳机录音
-        success = [audioSession setCategory:AVAudioSessionCategoryPlayAndRecord withOptions:AVAudioSessionCategoryOptionAllowBluetoothA2DP|AVAudioSessionCategoryOptionMixWithOthers error:&error];
-        [audioSession setMode:AVAudioSessionModeVideoRecording error:&error];//这个选项正好，但是AVCaptureSession会修改AVAudioSession属性
+        options = AVAudioSessionCategoryOptionAllowBluetoothA2DP|AVAudioSessionCategoryOptionMixWithOthers;
+        mode = AVAudioSessionModeVideoRecording;//这个选项正好，但是AVCaptureSession会修改AVAudioSession属性
+    }
+    if (![audioSession.category isEqualToString:AVAudioSessionCategoryPlayAndRecord] || audioSession.categoryOptions != options){
+        success = [audioSession setCategory:AVAudioSessionCategoryPlayAndRecord withOptions:options error:&error];
+    }
+
+    if(!success){
+        self.isActive = FALSE;
+        NSLog(@"AVAudioSession error setCategory = %@",error.debugDescription);
+        return;
     }
     
 
-    if(!success)
-        NSLog(@"AVAudioSession error setCategory = %@",error.debugDescription);
-
+    if (![audioSession.mode isEqualToString:mode]){
+        [audioSession setMode:mode error:&error];
+    }
+    
+    if (error){
+        self.isActive = FALSE;
+        NSLog(@"AVAudioSession error setMode = %@",error.debugDescription);
+        return;
+    }
+    
     success = [audioSession setActive:YES error:&error];
     if (success){
+        NSLog(@"AVAudioSession become active");
         self.isActive = TRUE;
         [self refreshAudioSource:nil];
+    }else{
+        NSLog(@"AVAudioSession error setActive = %@",error.debugDescription);
+        self.isActive = FALSE;
     }
 }
 
@@ -106,6 +128,7 @@
 }
 
 - (void) refreshAudioSource: (NSNotification *) notification{
+    NSLog(@"refreshAudioSource");
     [self useBestAudioOutput];
     if (self.selectMicSource == 1){
         [self useBuiltInMic];
@@ -165,6 +188,9 @@
         return FALSE;
     }
     AVAudioSessionPortDescription *currentInput = [inputs firstObject];
+    if (currentInput == nil){
+        return FALSE;
+    }
     if (self.selectMicSource == 0){
         return FALSE;
     }else if (self.selectMicSource == 1){
@@ -334,7 +360,7 @@
     if (reason == AVAudioSessionRouteChangeReasonNewDeviceAvailable || reason == AVAudioSessionRouteChangeReasonOldDeviceUnavailable ||
         reason == AVAudioSessionRouteChangeReasonWakeFromSleep || reason == AVAudioSessionRouteChangeReasonNoSuitableRouteForCategory){
         [self performSelector:@selector(configureAudio) withObject:notify afterDelay:0.1];
-    }else if ((self.forceSpeaker && ![currentOutput.portType isEqualToString:AVAudioSessionPortBuiltInSpeaker])
+    }else if ((self.forceSpeaker && currentOutput != nil && ![currentOutput.portType isEqualToString:AVAudioSessionPortBuiltInSpeaker])
               ||[self needSetMic:inputs] || [self needSetDefaultMicParams]){
         //如果当前的输入输出与预期的不符合或者参数不符合的也要重新更改一下
         [self performSelector:@selector(configureAudio) withObject:notify afterDelay:0.1];
