@@ -29,7 +29,7 @@
 - (void)viewDidLoad {
     [super viewDidLoad];
     self.selectMicSource = 1;//使用内置 mic
-    self.forceSpeaker = 1;//强制使用speaker
+    self.forceSpeaker = 0;//强制使用speaker
     // Do any additional setup after loading the view, typically from a nib.
    
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(onAudioSessionEvent:) name:AVAudioSessionInterruptionNotification object:nil];
@@ -116,6 +116,19 @@
     }
 }
 
+- (BOOL)needSetDefaultMicParams{
+    if (!self.isActive){
+        return FALSE;
+    }
+    AVAudioSession *audioSession = [AVAudioSession sharedInstance];
+    if (audioSession.preferredIOBufferDuration != 0.01 ||
+        audioSession.preferredSampleRate != 48000 ||
+        audioSession.preferredInputNumberOfChannels != 1){
+        return TRUE;
+    }
+    return FALSE;
+}
+
 - (void)setDefaultMicParams{
     if (!self.isActive){
         return;
@@ -130,7 +143,7 @@
         }
     }
     
-    //此选项确保可以录到所有的频谱
+    //此选项确保可以录到所有的频谱，小程序可以用当前录音参数中的samplerate来替代
     if (audioSession.preferredSampleRate != 48000){
         [audioSession setPreferredSampleRate:48000 error:&error];
         if (error){
@@ -148,6 +161,9 @@
 }
 
 - (BOOL)needSetMic: (NSArray *) inputs{
+    if (!self.isActive){
+        return FALSE;
+    }
     AVAudioSessionPortDescription *currentInput = [inputs firstObject];
     if (self.selectMicSource == 0){
         return FALSE;
@@ -318,12 +334,10 @@
     if (reason == AVAudioSessionRouteChangeReasonNewDeviceAvailable || reason == AVAudioSessionRouteChangeReasonOldDeviceUnavailable ||
         reason == AVAudioSessionRouteChangeReasonWakeFromSleep || reason == AVAudioSessionRouteChangeReasonNoSuitableRouteForCategory){
         [self performSelector:@selector(configureAudio) withObject:notify afterDelay:0.1];
-    }else{
-        if ((self.forceSpeaker && ![currentOutput.portType isEqualToString:AVAudioSessionPortBuiltInSpeaker])
-            ||[self needSetMic:inputs]){
-            //如果当前的输入输出与预期的不符合也要重新更改一下
-            [self performSelector:@selector(configureAudio) withObject:notify afterDelay:0.1];
-        }
+    }else if ((self.forceSpeaker && ![currentOutput.portType isEqualToString:AVAudioSessionPortBuiltInSpeaker])
+              ||[self needSetMic:inputs] || [self needSetDefaultMicParams]){
+        //如果当前的输入输出与预期的不符合或者参数不符合的也要重新更改一下
+        [self performSelector:@selector(configureAudio) withObject:notify afterDelay:0.1];
     }
 }
 
