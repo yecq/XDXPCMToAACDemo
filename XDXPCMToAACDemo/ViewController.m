@@ -318,10 +318,13 @@
     if (reason == AVAudioSessionRouteChangeReasonNewDeviceAvailable || reason == AVAudioSessionRouteChangeReasonOldDeviceUnavailable ||
         reason == AVAudioSessionRouteChangeReasonWakeFromSleep || reason == AVAudioSessionRouteChangeReasonNoSuitableRouteForCategory){
         [self performSelector:@selector(configureAudio) withObject:notify afterDelay:0.1];
-    }else if ([self needSetMic:inputs]){
-        [self performSelector:@selector(configureAudio) withObject:notify afterDelay:0.1];
+    }else{
+        if ((self.forceSpeaker && ![currentOutput.portType isEqualToString:AVAudioSessionPortBuiltInSpeaker])
+            ||[self needSetMic:inputs]){
+            //如果当前的输入输出与预期的不符合也要重新更改一下
+            [self performSelector:@selector(configureAudio) withObject:notify afterDelay:0.1];
+        }
     }
-    
 }
 
 
