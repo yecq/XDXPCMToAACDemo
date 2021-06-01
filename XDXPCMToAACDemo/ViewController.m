@@ -115,6 +115,7 @@
     if (!self.isActive){
         return;
     }
+    BOOL needSetMic = TRUE;
     NSError* error = nil;
     AVAudioSession *audioSession = [AVAudioSession sharedInstance];
     
@@ -124,35 +125,37 @@
         AVAudioSessionDataSourceDescription* source = [currentInput.dataSources firstObject];
         NSString* polar = [source selectedPolarPattern];
         if (currentInput.selectedDataSource == source && [polar isEqualToString:AVAudioSessionPolarPatternOmnidirectional]){
-            return;//不需要做任何设置
+            needSetMic = FALSE;//不需要做任何设置
         }
     }
-    NSLog(@"use built in mic");
-    for (AVAudioSessionPortDescription *inputPort in [audioSession availableInputs])
-    {
-        if([inputPort.portType isEqualToString:AVAudioSessionPortBuiltInMic])
+    if (needSetMic){
+        NSLog(@"use built in mic");
+        for (AVAudioSessionPortDescription *inputPort in [audioSession availableInputs])
         {
-            [audioSession setPreferredInput:inputPort error:&error];
-            if (error){
-                NSLog(@"AVAudioSession error setPreferredInput = %@",error.debugDescription);
-            }
-            //我们只用最安全的第一个data source和全向 polar
-            for (AVAudioSessionDataSourceDescription* source in [inputPort dataSources]){
-                
-                [inputPort setPreferredDataSource:source error:&error];
+            if([inputPort.portType isEqualToString:AVAudioSessionPortBuiltInMic])
+            {
+                [audioSession setPreferredInput:inputPort error:&error];
                 if (error){
-                    NSLog(@"AVAudioSession error setPreferredDataSource = %@",error.debugDescription);
+                    NSLog(@"AVAudioSession error setPreferredInput = %@",error.debugDescription);
+                }
+                //我们只用最安全的第一个data source和全向 polar
+                for (AVAudioSessionDataSourceDescription* source in [inputPort dataSources]){
+                    
+                    [inputPort setPreferredDataSource:source error:&error];
+                    if (error){
+                        NSLog(@"AVAudioSession error setPreferredDataSource = %@",error.debugDescription);
+                    }
+                    
+                    [source setPreferredPolarPattern:AVAudioSessionPolarPatternOmnidirectional
+                                               error:&error];
+                    if (error){
+                        NSLog(@"AVAudioSession error setPreferredPolarPattern = %@",error.debugDescription);
+                    }
+                    break;
                 }
                 
-                [source setPreferredPolarPattern:AVAudioSessionPolarPatternOmnidirectional
-                                           error:&error];
-                if (error){
-                    NSLog(@"AVAudioSession error setPreferredPolarPattern = %@",error.debugDescription);
-                }
                 break;
             }
-            
-            break;
         }
     }
     if (audioSession.preferredIOBufferDuration != 0.01){
