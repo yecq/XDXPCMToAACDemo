@@ -15,22 +15,27 @@
 #define kScreenWidth [UIScreen mainScreen].bounds.size.width
 #define kScreenHeight [UIScreen mainScreen].bounds.size.height
 
+typedef enum : NSUInteger {
+    DEFAULT_MIC,
+    BUILTIN_MIC,
+    HEADSET_MIC,
+} MIC_TYPES;
 
 @interface ViewController ()
 
 @property (nonatomic, strong) XDXRecorder    *liveRecorder;
 @property (nonatomic, strong) XDXVolumeView  *recordVolumeView;
 @property (nonatomic, assign) BOOL              isActive;
-@property (nonatomic, assign) int               selectMicSource; //0 default    1 builtinmic      2 headsetmic
-@property (nonatomic, assign) int               forceSpeaker; //0 no    1 force
+@property (nonatomic, assign) MIC_TYPES         selectMicSource; //0 default    1 builtinmic      2 headsetmic
+@property (nonatomic, assign) BOOL              forceSpeaker; //是否想要强制用喇叭输出
 @end
 
 @implementation ViewController
 
 - (void)viewDidLoad {
     [super viewDidLoad];
-    self.selectMicSource = 1;//使用内置 mic
-    self.forceSpeaker = 0;//强制使用speaker
+    self.selectMicSource = DEFAULT_MIC;
+    self.forceSpeaker = FALSE;
     // Do any additional setup after loading the view, typically from a nib.
    
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(onAudioSessionEvent:) name:AVAudioSessionInterruptionNotification object:nil];
@@ -59,9 +64,29 @@
     // Dispose of any resources that can be recreated.
 }
 
+- (IBAction)setDefault:(id)sender {
+    self.selectMicSource = DEFAULT_MIC;
+    [self configureAudio];
+}
+
+- (IBAction)setBuiltInMic:(id)sender {
+    self.selectMicSource = BUILTIN_MIC;
+    [self configureAudio];
+}
+
+- (IBAction)setHeadsetMic:(id)sender {
+    self.selectMicSource = HEADSET_MIC;
+    [self configureAudio];
+}
+
+- (IBAction)switchForceSpeaker:(id)sender {
+    self.forceSpeaker = !self.forceSpeaker;
+    [self configureAudio];
+}
+
 -(void)configureAudio
 {
-    [[JSToastDialogs shareInstance] makeToast:@"configureAudio" duration:1.0];
+//    [[JSToastDialogs shareInstance] makeToast:@"configureAudio" duration:1.0];
     AVAudioSession *audioSession = [AVAudioSession sharedInstance];
     
     BOOL success = FALSE;
@@ -74,7 +99,7 @@
     //当需要从喇叭播放时请使用audioSession overrideOutputAudioPort:<#(AVAudioSessionPortOverride)#> error:<#(NSError * _Nullable * _Nullable)#>
     AVAudioSessionCategoryOptions options;
     NSString* mode;
-    if (self.selectMicSource == 0){
+    if (self.selectMicSource == DEFAULT_MIC){
         //default,用系统默认，允许蓝牙耳机录音
         options = AVAudioSessionCategoryOptionAllowBluetooth|AVAudioSessionCategoryOptionAllowBluetoothA2DP|AVAudioSessionCategoryOptionMixWithOthers;
         mode = AVAudioSessionModeDefault;
@@ -103,8 +128,10 @@
 
     success = [audioSession setActive:YES error:&error];
     if (success){
-        NSLog(@"AVAudioSession become active");
-        self.isActive = TRUE;
+        if (!self.isActive){
+            NSLog(@"AVAudioSession become active");
+            self.isActive = TRUE;
+        }
         [self refreshAudioSource:nil];
     }else{
         NSLog(@"AVAudioSession error setActive = %@",error.debugDescription);
@@ -118,23 +145,28 @@
     }
     AVAudioSessionRouteDescription *currentRoute = [[AVAudioSession sharedInstance] currentRoute];
     AVAudioSessionPortDescription *currentOutput = [[currentRoute outputs] firstObject];
-    if (![currentOutput.portType isEqualToString:AVAudioSessionPortBuiltInSpeaker] && self.forceSpeaker){
+    if (self.forceSpeaker && ![currentOutput.portType isEqualToString:AVAudioSessionPortBuiltInSpeaker]){
         NSLog(@"set to speaker output");
         [[AVAudioSession sharedInstance] overrideOutputAudioPort:AVAudioSessionPortOverrideSpeaker error:nil];
-    }else{
+    }else if (!self.forceSpeaker){
         [[AVAudioSession sharedInstance] overrideOutputAudioPort:AVAudioSessionPortOverrideNone error:nil];
     }
 }
 
 - (void) refreshAudioSource: (NSNotification *) notification{
     NSLog(@"refreshAudioSource");
-    [[JSToastDialogs shareInstance] makeToast:@"refreshAudioSource" duration:1.0];
+//    [[JSToastDialogs shareInstance] makeToast:@"refreshAudioSource" duration:1.0];
     [self useBestAudioOutput];
-    if (self.selectMicSource == 1){
+    if (self.selectMicSource == BUILTIN_MIC){
         [self useBuiltInMic];
-    }else if (self.selectMicSource == 2){
+    }else if (self.selectMicSource == HEADSET_MIC){
         [self useHeadsetMic];
     }else{
+        if ([AVAudioSession sharedInstance].preferredInput != nil){
+            //clear prefererd input if we use default
+            [[AVAudioSession sharedInstance] setPreferredInput:nil error:nil];
+        }
+        
         [self setDefaultMicParams];
     }
 }
@@ -144,9 +176,9 @@
         return FALSE;
     }
     AVAudioSession *audioSession = [AVAudioSession sharedInstance];
-    if (audioSession.preferredIOBufferDuration != 0.01 ||
-        audioSession.preferredSampleRate != 48000 ||
+    if (audioSession.preferredSampleRate != 48000 ||
         audioSession.preferredInputNumberOfChannels != 1){
+        NSLog(@"audioSession.preferredSampleRate:%f\naudioSession.preferredInputNumberOfChannels:%ld",audioSession.preferredSampleRate,(long)audioSession.preferredInputNumberOfChannels);
         return TRUE;
     }
     return FALSE;
@@ -158,13 +190,6 @@
     }
     NSError* error = nil;
     AVAudioSession *audioSession = [AVAudioSession sharedInstance];
-    
-    if (audioSession.preferredIOBufferDuration != 0.01){
-        [audioSession setPreferredIOBufferDuration:0.01 error:&error]; // 10ms采集一次
-        if (error){
-            NSLog(@"AVAudioSession error setPreferredIOBufferDuration = %@",error.debugDescription);
-        }
-    }
     
     //此选项确保可以录到所有的频谱，小程序可以用当前录音参数中的samplerate来替代
     if (audioSession.preferredSampleRate != 48000){
@@ -187,29 +212,44 @@
     if (!self.isActive){
         return FALSE;
     }
+    AVAudioSession* session = [AVAudioSession sharedInstance];
     AVAudioSessionPortDescription *currentInput = [inputs firstObject];
-    if (currentInput == nil){
+
+    if (self.selectMicSource == DEFAULT_MIC){
+        //we need to clear preferred input
+        if (session.preferredInput != nil){
+            return TRUE;
+        }
         return FALSE;
-    }
-    if (self.selectMicSource == 0){
-        return FALSE;
-    }else if (self.selectMicSource == 1){
+    }else if (self.selectMicSource == BUILTIN_MIC){
+        //if builtin mic is already used, check params
         if ([currentInput.portType isEqualToString:AVAudioSessionPortBuiltInMic]){
             AVAudioSessionDataSourceDescription* source = [currentInput.dataSources firstObject];
             NSString* polar = [source selectedPolarPattern];
-            if (currentInput.selectedDataSource == source && [polar isEqualToString:AVAudioSessionPolarPatternOmnidirectional]){
+            if ((currentInput.selectedDataSource.dataSourceID == source.dataSourceID) && [polar isEqualToString:AVAudioSessionPolarPatternOmnidirectional]){
                 return FALSE;
             }else{
                 return TRUE;
             }
         }
-    }else if (self.selectMicSource == 2){
+        //we need to set preferred input
+        if (session.preferredInput != nil && ![session.preferredInput.portType isEqualToString:AVAudioSessionPortBuiltInMic]){
+            return TRUE;
+        }
+    }else if (self.selectMicSource == HEADSET_MIC){
+        if (self.forceSpeaker){
+            return FALSE;//don't try to change input if we use overrideOutput
+        }
         if ([currentInput.portType isEqualToString:AVAudioSessionPortHeadsetMic]){
             return FALSE;
         }
+        //we need to set preferred input
+        if (session.preferredInput != nil && ![session.preferredInput.portType isEqualToString:AVAudioSessionPortHeadsetMic]){
+            return TRUE;
+        }
     }
-    if ([[[AVAudioSession sharedInstance] availableInputs] count] > 1){
-        return TRUE; //if there is more choice, let's try set
+    if ([[session availableInputs] count] > 1){
+        return TRUE; //if there is more choice, let's try
     }
     return FALSE;
 }
@@ -232,7 +272,7 @@
         }
     }
     if (needSetMic){
-        [[JSToastDialogs shareInstance] makeToast:@"use built in mic" duration:1.0];
+//        [[JSToastDialogs shareInstance] makeToast:@"use built in mic" duration:1.0];
         NSLog(@"use built in mic");
         for (AVAudioSessionPortDescription *inputPort in [audioSession availableInputs])
         {
@@ -269,6 +309,13 @@
                 break;
             }
         }
+        //clear if prefered input is not right
+        if (audioSession.preferredInput != nil && ![audioSession.preferredInput.portType isEqualToString:AVAudioSessionPortBuiltInMic]){
+            [audioSession setPreferredInput:nil error:&error];
+            if (error){
+                NSLog(@"AVAudioSession error setPreferredInput = %@",error.debugDescription);
+            }
+        }
     }
     [self setDefaultMicParams];
 }
@@ -283,8 +330,8 @@
     
     AVAudioSessionRouteDescription *currentRoute = [[AVAudioSession sharedInstance] currentRoute];
     AVAudioSessionPortDescription *currentInput = [[currentRoute inputs] firstObject];
-    if ([currentInput.portType isEqualToString:AVAudioSessionPortHeadsetMic]){
-        needSetMic = FALSE;//不需要做任何设置
+    if (self.forceSpeaker || [currentInput.portType isEqualToString:AVAudioSessionPortHeadsetMic]){
+        needSetMic = FALSE;//如果当前已经在用耳机或是强制输出喇叭，就不要做任何设置
     }
     if (needSetMic){
         NSLog(@"use headset mic");
@@ -300,6 +347,13 @@
                 }
                 
                 break;
+            }
+        }
+        //clear if prefered input is not right
+        if (audioSession.preferredInput != nil && ![audioSession.preferredInput.portType isEqualToString:AVAudioSessionPortHeadsetMic]){
+            [audioSession setPreferredInput:nil error:&error];
+            if (error){
+                NSLog(@"AVAudioSession error setPreferredInput = %@",error.debugDescription);
             }
         }
     }
@@ -356,9 +410,10 @@
     NSNumber *routeChangeReason = [dic objectForKey:AVAudioSessionRouteChangeReasonKey];
 
     int reason = [routeChangeReason intValue];
-//    NSString* msg = [NSString stringWithFormat:@"audio route changed: reason: %@\n input:\n|old|%@,\n|new|%@,\n output:\n|old|%@,\n|new|%@",routeChangeReason,[oldInput debugDescription],[currentInput debugDescription],[oldOutput debugDescription],[currentOutput debugDescription]];
+    
+    NSString* msg = [NSString stringWithFormat:@"audio route changed: reason: %@\n input:\n|old|%@,\n|new|%@,\n output:\n|old|%@,\n|new|%@",routeChangeReason,[oldInput debugDescription],[currentInput debugDescription],[oldOutput debugDescription],[currentOutput debugDescription]];
 //    NSString* msg = [NSString stringWithFormat:@"%@", [[AVAudioSession sharedInstance].availableInputs debugDescription]];
-//    [[JSToastDialogs shareInstance] makeToast:msg duration:5.0];
+    [[JSToastDialogs shareInstance] makeToast:msg duration:5.0];
     NSLog(@"audio route changed: reason: %@\n input:\n|old|%@,\n|new|%@,\n output:\n|old|%@,\n|new|%@",routeChangeReason,[oldInput debugDescription],[currentInput debugDescription],[oldOutput debugDescription],[currentOutput debugDescription]);
     //每次有变化时根据当前程序的设置需要重新更改一下
     if (reason == AVAudioSessionRouteChangeReasonNewDeviceAvailable || reason == AVAudioSessionRouteChangeReasonOldDeviceUnavailable ||
