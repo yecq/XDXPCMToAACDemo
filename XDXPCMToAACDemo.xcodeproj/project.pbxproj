@@ -18,6 +18,7 @@
 		641B54401E83CD81008DDB61 /* XDXRecoder.mm in Sources */ = {isa = PBXBuildFile; fileRef = 641B543F1E83CD81008DDB61 /* XDXRecoder.mm */; };
 		641B54431E83D1E0008DDB61 /* XDXDateTool.m in Sources */ = {isa = PBXBuildFile; fileRef = 641B54421E83D1E0008DDB61 /* XDXDateTool.m */; };
 		643B895D1FBED0B300205594 /* XDXVolumeView.m in Sources */ = {isa = PBXBuildFile; fileRef = 643B895C1FBED0B300205594 /* XDXVolumeView.m */; };
+		B963F7432666FC480071C7F3 /* JSToastDialogs.m in Sources */ = {isa = PBXBuildFile; fileRef = B963F7422666FC480071C7F3 /* JSToastDialogs.m */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -60,6 +61,8 @@
 		641B54421E83D1E0008DDB61 /* XDXDateTool.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = XDXDateTool.m; sourceTree = "<group>"; };
 		643B895B1FBED0B300205594 /* XDXVolumeView.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = XDXVolumeView.h; sourceTree = "<group>"; };
 		643B895C1FBED0B300205594 /* XDXVolumeView.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = XDXVolumeView.m; sourceTree = "<group>"; };
+		B963F7412666FC480071C7F3 /* JSToastDialogs.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = JSToastDialogs.h; sourceTree = "<group>"; };
+		B963F7422666FC480071C7F3 /* JSToastDialogs.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = JSToastDialogs.m; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -110,6 +113,8 @@
 		641B54071E83CCC4008DDB61 /* XDXPCMToAACDemo */ = {
 			isa = PBXGroup;
 			children = (
+				B963F7412666FC480071C7F3 /* JSToastDialogs.h */,
+				B963F7422666FC480071C7F3 /* JSToastDialogs.m */,
 				643B895A1FBED0AB00205594 /* XDXVolumeView */,
 				641B54411E83D1E0008DDB61 /* XDXDateTool.h */,
 				641B54421E83D1E0008DDB61 /* XDXDateTool.m */,
@@ -229,7 +234,7 @@
 				TargetAttributes = {
 					641B54041E83CCC4008DDB61 = {
 						CreatedOnToolsVersion = 8.2.1;
-						DevelopmentTeam = YDEVQQ22JR;
+						DevelopmentTeam = N47G3PKGRJ;
 						ProvisioningStyle = Automatic;
 					};
 					641B541D1E83CCC4008DDB61 = {
@@ -296,6 +301,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				B963F7432666FC480071C7F3 /* JSToastDialogs.m in Sources */,
 				641B54431E83D1E0008DDB61 /* XDXDateTool.m in Sources */,
 				641B54101E83CCC4008DDB61 /* ViewController.m in Sources */,
 				641B540D1E83CCC4008DDB61 /* AppDelegate.m in Sources */,
@@ -451,7 +457,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_OBJC_ARC = NO;
-				DEVELOPMENT_TEAM = YDEVQQ22JR;
+				DEVELOPMENT_TEAM = N47G3PKGRJ;
 				INFOPLIST_FILE = XDXPCMToAACDemo/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
 				PRODUCT_BUNDLE_IDENTIFIER = com.xdx.XDXPCMToAACDemo.XDXPCMToAACDemo;
@@ -464,7 +470,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_OBJC_ARC = NO;
-				DEVELOPMENT_TEAM = YDEVQQ22JR;
+				DEVELOPMENT_TEAM = N47G3PKGRJ;
 				INFOPLIST_FILE = XDXPCMToAACDemo/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
 				PRODUCT_BUNDLE_IDENTIFIER = com.xdx.XDXPCMToAACDemo.XDXPCMToAACDemo;
