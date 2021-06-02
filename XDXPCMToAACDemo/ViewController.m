@@ -10,6 +10,7 @@
 #import "XDXRecoder.h"
 #import <AVFoundation/AVFoundation.h>
 #import "XDXVolumeView.h"
+#import "JSToastDialogs.h"
 
 #define kScreenWidth [UIScreen mainScreen].bounds.size.width
 #define kScreenHeight [UIScreen mainScreen].bounds.size.height
@@ -60,6 +61,7 @@
 
 -(void)configureAudio
 {
+    [[JSToastDialogs shareInstance] makeToast:@"configureAudio" duration:1.0];
     AVAudioSession *audioSession = [AVAudioSession sharedInstance];
     
     BOOL success = FALSE;
@@ -83,25 +85,22 @@
     }
     if (![audioSession.category isEqualToString:AVAudioSessionCategoryPlayAndRecord] || audioSession.categoryOptions != options){
         success = [audioSession setCategory:AVAudioSessionCategoryPlayAndRecord withOptions:options error:&error];
+        if(!success){
+            self.isActive = FALSE;
+            NSLog(@"AVAudioSession error setCategory = %@",error.debugDescription);
+            return;
+        }
     }
-
-    if(!success){
-        self.isActive = FALSE;
-        NSLog(@"AVAudioSession error setCategory = %@",error.debugDescription);
-        return;
-    }
-    
 
     if (![audioSession.mode isEqualToString:mode]){
         [audioSession setMode:mode error:&error];
+        if (error){
+            self.isActive = FALSE;
+            NSLog(@"AVAudioSession error setMode = %@",error.debugDescription);
+            return;
+        }
     }
-    
-    if (error){
-        self.isActive = FALSE;
-        NSLog(@"AVAudioSession error setMode = %@",error.debugDescription);
-        return;
-    }
-    
+
     success = [audioSession setActive:YES error:&error];
     if (success){
         NSLog(@"AVAudioSession become active");
@@ -129,6 +128,7 @@
 
 - (void) refreshAudioSource: (NSNotification *) notification{
     NSLog(@"refreshAudioSource");
+    [[JSToastDialogs shareInstance] makeToast:@"refreshAudioSource" duration:1.0];
     [self useBestAudioOutput];
     if (self.selectMicSource == 1){
         [self useBuiltInMic];
@@ -227,33 +227,42 @@
     if ([currentInput.portType isEqualToString:AVAudioSessionPortBuiltInMic]){
         AVAudioSessionDataSourceDescription* source = [currentInput.dataSources firstObject];
         NSString* polar = [source selectedPolarPattern];
-        if (currentInput.selectedDataSource == source && [polar isEqualToString:AVAudioSessionPolarPatternOmnidirectional]){
+        if ([currentInput.selectedDataSource dataSourceID] == [source dataSourceID] && [polar isEqualToString:AVAudioSessionPolarPatternOmnidirectional]){
             needSetMic = FALSE;//不需要做任何设置
         }
     }
     if (needSetMic){
+        [[JSToastDialogs shareInstance] makeToast:@"use built in mic" duration:1.0];
         NSLog(@"use built in mic");
         for (AVAudioSessionPortDescription *inputPort in [audioSession availableInputs])
         {
             if([inputPort.portType isEqualToString:AVAudioSessionPortBuiltInMic])
             {
-                [audioSession setPreferredInput:inputPort error:&error];
-                if (error){
-                    NSLog(@"AVAudioSession error setPreferredInput = %@",error.debugDescription);
+                if (audioSession.preferredInput == nil || ![audioSession.preferredInput.portType isEqualToString:AVAudioSessionPortBuiltInMic]){
+                    [audioSession setPreferredInput:inputPort error:&error];
+                    if (error){
+                        NSLog(@"AVAudioSession error setPreferredInput = %@",error.debugDescription);
+                    }
                 }
+               
                 //我们只用最安全的第一个data source和全向 polar
                 for (AVAudioSessionDataSourceDescription* source in [inputPort dataSources]){
-                    
-                    [inputPort setPreferredDataSource:source error:&error];
-                    if (error){
-                        NSLog(@"AVAudioSession error setPreferredDataSource = %@",error.debugDescription);
+                    if (inputPort.preferredDataSource == nil || [inputPort.preferredDataSource dataSourceID] != [source dataSourceID]){
+                        [inputPort setPreferredDataSource:source error:&error];
+                        if (error){
+                            NSLog(@"AVAudioSession error setPreferredDataSource = %@",error.debugDescription);
+                        }
                     }
-                    
-                    [source setPreferredPolarPattern:AVAudioSessionPolarPatternOmnidirectional
-                                               error:&error];
-                    if (error){
-                        NSLog(@"AVAudioSession error setPreferredPolarPattern = %@",error.debugDescription);
+
+                    if (![[source preferredPolarPattern] isEqualToString:AVAudioSessionPolarPatternOmnidirectional]){
+                        [source setPreferredPolarPattern:AVAudioSessionPolarPatternOmnidirectional
+                                                   error:&error];
+                        
+                        if (error){
+                            NSLog(@"AVAudioSession error setPreferredPolarPattern = %@",error.debugDescription);
+                        }
                     }
+
                     break;
                 }
                 
@@ -283,19 +292,11 @@
         {
             if([inputPort.portType isEqualToString:AVAudioSessionPortHeadsetMic])
             {
-                [audioSession setPreferredInput:inputPort error:&error];
-                if (error){
-                    NSLog(@"AVAudioSession error setPreferredInput = %@",error.debugDescription);
-                }
-                //我们只用最安全的第一个data source
-                for (AVAudioSessionDataSourceDescription* source in [inputPort dataSources]){
-                    
-                    [inputPort setPreferredDataSource:source error:&error];
+                if (audioSession.preferredInput == nil || ![audioSession.preferredInput.portType isEqualToString:AVAudioSessionPortHeadsetMic]){
+                    [audioSession setPreferredInput:inputPort error:&error];
                     if (error){
-                        NSLog(@"AVAudioSession error setPreferredDataSource = %@",error.debugDescription);
+                        NSLog(@"AVAudioSession error setPreferredInput = %@",error.debugDescription);
                     }
-                    
-                    break;
                 }
                 
                 break;
@@ -355,6 +356,9 @@
     NSNumber *routeChangeReason = [dic objectForKey:AVAudioSessionRouteChangeReasonKey];
 
     int reason = [routeChangeReason intValue];
+//    NSString* msg = [NSString stringWithFormat:@"audio route changed: reason: %@\n input:\n|old|%@,\n|new|%@,\n output:\n|old|%@,\n|new|%@",routeChangeReason,[oldInput debugDescription],[currentInput debugDescription],[oldOutput debugDescription],[currentOutput debugDescription]];
+//    NSString* msg = [NSString stringWithFormat:@"%@", [[AVAudioSession sharedInstance].availableInputs debugDescription]];
+//    [[JSToastDialogs shareInstance] makeToast:msg duration:5.0];
     NSLog(@"audio route changed: reason: %@\n input:\n|old|%@,\n|new|%@,\n output:\n|old|%@,\n|new|%@",routeChangeReason,[oldInput debugDescription],[currentInput debugDescription],[oldOutput debugDescription],[currentOutput debugDescription]);
     //每次有变化时根据当前程序的设置需要重新更改一下
     if (reason == AVAudioSessionRouteChangeReasonNewDeviceAvailable || reason == AVAudioSessionRouteChangeReasonOldDeviceUnavailable ||
