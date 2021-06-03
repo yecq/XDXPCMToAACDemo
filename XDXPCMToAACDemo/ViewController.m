@@ -84,6 +84,26 @@ typedef enum : NSUInteger {
     [self configureAudio];
 }
 
+-(BOOL)needSetCategory{
+    AVAudioSession *audioSession = [AVAudioSession sharedInstance];
+    AVAudioSessionCategoryOptions options;
+    NSString* mode;
+    if (self.selectMicSource == DEFAULT_MIC){
+        //default,用系统默认，允许蓝牙耳机录音
+        options = AVAudioSessionCategoryOptionAllowBluetooth|AVAudioSessionCategoryOptionAllowBluetoothA2DP|AVAudioSessionCategoryOptionMixWithOthers;
+        mode = AVAudioSessionModeDefault;
+    }else{
+        //另外两种不允许蓝牙耳机录音
+        options = AVAudioSessionCategoryOptionAllowBluetoothA2DP|AVAudioSessionCategoryOptionMixWithOthers;
+        mode = AVAudioSessionModeVideoRecording;//这个选项正好，但是AVCaptureSession会修改AVAudioSession属性
+    }
+    if (![audioSession.category isEqualToString:AVAudioSessionCategoryPlayAndRecord] ||
+        audioSession.categoryOptions != options || ![audioSession.mode isEqualToString:mode])
+        return TRUE;
+    
+    return FALSE;
+}
+
 -(void)configureAudio
 {
 //    [[JSToastDialogs shareInstance] makeToast:@"configureAudio" duration:1.0];
@@ -420,7 +440,7 @@ typedef enum : NSUInteger {
         reason == AVAudioSessionRouteChangeReasonWakeFromSleep || reason == AVAudioSessionRouteChangeReasonNoSuitableRouteForCategory){
         [self performSelector:@selector(configureAudio) withObject:notify afterDelay:0.1];
     }else if ((self.forceSpeaker && currentOutput != nil && ![currentOutput.portType isEqualToString:AVAudioSessionPortBuiltInSpeaker])
-              ||[self needSetMic:inputs] || [self needSetDefaultMicParams]){
+              || [self needSetCategory] ||[self needSetMic:inputs] || [self needSetDefaultMicParams]){
         //如果当前的输入输出与预期的不符合或者参数不符合的也要重新更改一下
         [self performSelector:@selector(configureAudio) withObject:notify afterDelay:0.1];
     }
